@@ -1,0 +1,11 @@
+/* Make html and body full height and width */
+html, body { width: 100%; height: 100%;
+}
+
+/* Make the Shiny app container full size */
+#shiny-app-container { background-color: #d6c863; width: 100% !important; height: 100% !important;
+}
+
+/* Make all main panels inside Shiny full width */
+.main-panel { width: 100% !important;
+}
