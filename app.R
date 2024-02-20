@@ -1,5 +1,7 @@
 #Application that creates the rainfall landing
-#Code by: Ricardo Pommer Muñoz
+#Code by: Ricardo Pommer Muñoz, based on 
+# Tushar Kundu's teacher tool
+
 #Updated on 12/26/23
 
 #&&&&&&&&&&&&&&&&&&
@@ -7,28 +9,23 @@
 #&&&&&&&&&&&&&&&&&&
 
 #Required packages
-#library(colorspace)
-#library(gt)
+
 library(DT)
-#library(data.table)
 library(shiny)
 library(stringr)
 library(ggplot2)
-#library(auth0)
 library(keyring)
 library(shinymanager)
 library(gtools)
 library(shinylogs)
 library(dplyr)
+library(DBI)
+library(RPostgreSQL)
 
 
-#Server side stuff ----
-#For auth0
-#options(shiny.port = 3838)
-#keyring_unlock(keyring = "system", password = "secret")
 
-#UI ----
-# Define UI
+
+# UI definitions
 ui <- fluidPage(
   tagList(includeCSS('www/style.css')),
   
@@ -52,31 +49,21 @@ ui <- fluidPage(
   )
 )
     
-#Design the authentication page----
+# authentication page design
 ui <- secure_app(ui, enable_admin = T,
-                 # add image on top ?
                  tags_top = 
                    tags$div(
-                     tags$h2("Portal de Lluvias Personalizado", style = "font-family: Arial; align:center"),
-                     #tags$img(
-                     #   src = "https://advertisingweek.com/wp-content/uploads/2022/11/mindset-concept-watering-plants-with-big-brain-growth-mindset-concept.jpg_s1024x1024wisk20czP9Uq_aL7U7zSCYuBhaMlF6s8u3BUquvSO20MFDZxTA-1170x600.jpg", width = 100
-                     #)
+                     tags$h2("Portal de Lluvias Personalizado", style = "font-family: Helvetica; align:center"),
                    ),
-                 # add information on bottom ?
                  tags_bottom = 
                    tags$div(tags$p(
                      "Si tiene preguntas, por favor contactar via WhatsApp al +17328443418 o al", tags$a(
                        href = "mailto:rap2194@columbia.edu?Subject=Portal de Lluvias Personal",
                        target="_top", "administrador"
                      ),
-                     style = "font-family: Arial;"
+                     style = "font-family: Helvetica;"
                    )
                    ),
-                 # change auth ui background ?
-                 # https://developer.mozilla.org/fr/docs/Web/CSS/background
-                 # background  = "linear-gradient(rgba(0, 127, 255, 0.5), rgba(144, 238, 144, 0.5)),
-                  #     url('https://media.istockphoto.com/id/867412692/vector/health-icon.jpg?s=612x612&w=0&k=20&c=qqxN-fIU8m0xW_U76vnFzTJvSJ79QIN_m8VHvLeDbrs=');background-size = '450px auto';", 
-                 # set language ?
                  language = "es")
 
 set_labels(
@@ -105,6 +92,7 @@ server <- function(input, output, session) {
   
   # Reactive expression to get the user's vereda based on their authentication
   user_vereda <- reactive({
+    # NO ENCRYPTION FOR NOW
     # Get the authenticated username
     # if (is.null(auth$user())) {
     #   return(NULL)
@@ -128,7 +116,7 @@ server <- function(input, output, session) {
   })
   
   output$dynamicVeredaTitle <- renderText({
-    paste0("Parecido de lluvia con vereda '", user_vereda(), "'")
+    paste0("Parecidos de lluvia con vereda '", user_vereda(), "'")
   })
   
   
