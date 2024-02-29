@@ -44,19 +44,37 @@ ui <- fluidPage(
       tabPanel("Datos", 
                fluidPage(
                  h3(textOutput("dynamicVeredaTitle")), # Dynamic Title for Vereda
-                 ### FOR DEBUG ONLY
-                 h4(textOutput("connectionStatus")),
-                 h4(textOutput("currentUserId")),
-                 h4(verbatimTextOutput("dbFeedback")),
+                 # ### FOR DEBUG ONLY
+                 # h4(textOutput("connectionStatus")),
+                 # h4(textOutput("currentUserId")),
+                 # h4(verbatimTextOutput("dbFeedback")),
+                 # ###
                  DTOutput("correlationTable"),
                  actionButton("show_plot", "Ver lluvia histórica"),
                  actionButton("insurance_sim", "Simular Seguro"),
                  h3("Lluvia y Pérdidas"), # Title for the second table
                  DTOutput("yieldRainTable"), # Second table output
+                 uiOutput('editUI'),
                  plotOutput("scatterPlot")
                )
       ),
-      tabPanel("Instrucciones"))
+      tabPanel("Instrucciones",
+               fluidPage(
+                 # Embed a YouTube video
+                 tags$h3("Instalación Pluviómetro"),
+                 tags$iframe(width = "560", height = "315",
+                             src = "https://www.youtube.com/embed/Nbtqqh6iKWA",  # Replace VIDEO_ID with your actual YouTube video ID
+                             frameborder = "0",
+                             allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+                             allowfullscreen = NA),
+                 tags$h3("Instructivo Plataforma"),
+                 tags$iframe(width = "560", height = "315",
+                             src = "https://www.youtube.com/embed/TmOTJMtfdgw",  # Replace VIDEO_ID with your actual YouTube video ID
+                             frameborder = "0",
+                             allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture",
+                             allowfullscreen = NA),
+                 
+               )))
   )
  
 )
@@ -155,96 +173,142 @@ server <- function(input, output, session) {
     reactiveValuesToList(auth)
   })
   
-  # historic yield-rain data
-  yield_rain_data <- read.csv("yield_rain_javier.csv") %>% 
-    arrange(desc(Año))
+  # initialize user_input to a reactive value
+  user_input <- reactiveVal()
+    
   
-  
-  # Initialize a reactive value to store user input for each row
-  user_input <- reactiveVal(yield_rain_data)
-  
-  # Observe any edits and update the reactive value
-  observeEvent(input$yieldRainTable_cell_edit, {
-    info <- input$yieldRainTable_cell_edit
-    
-    # Use showNotification for debugging
-    shiny::showNotification(paste("Edited cell at row", info$row, "and column", info$col))
-    
-    modified_data <- user_input()
-    modified_data[info$row, info$col] <- info$value
-    user_input(modified_data)
-    
-    # TEST TO PRINT
-    # Check if the "Mi cafe" column was edited and if the value has changed
-    if (colnames(modified_data)[info$col] == "Mi cafe" && old_value != info$value) {
-      # Update the feedbackMessage to indicate the change
-      feedbackMessage("changed")
-      shiny::showNotification("Mi cafe changed")
-    }
-    
-    # WRITE THE CHANGES INTO DB
-    user_id <- auth$user
-    
-    # Construct the SQL query to update the database
-    query <- sprintf(
-      "INSERT INTO mi_cafe_data (user_id, year, mi_cafe) VALUES (%s, %d, '%s') ON CONFLICT (user_id, year) DO UPDATE SET mi_cafe = EXCLUDED.mi_cafe",
-      user_id, 
-      modified_data[info$row, 'Año'], 
-      info$value
-    )
-    
-    # Instead of using print, update the reactive value:
-    result <- tryCatch({
-      dbExecute(db, query)
-    }, error = function(e) {
-      feedbackMessage(paste("Error executing query:", e$message))
-      return(NULL)  # Return NULL on error
-    })
-    
-    if (!is.null(result)) {
-      if (result == 0) {
-        feedbackMessage("No rows were inserted or updated.")
-      } else {
-        feedbackMessage(paste(result, "rows were inserted or updated successfully."))
-      }
+  # LOAD UP DATABASE BY CHECKING USERNAME
+  observe({
+    # Ensure there's a valid user ID before attempting to fetch data
+    if (!is.null(auth$user)) {
+      user_id <- as.integer(auth$user)
+      
+      db_con <- dbConnect(RPostgreSQL::PostgreSQL(), dbname = db_params$dbname, host = db_params$host,
+                          port = db_params$port, user = db_params$user, password = db_params$password)
+      
+      query <- sprintf("SELECT * FROM mi_cafe_data WHERE user_id = %d ORDER BY year DESC", user_id)
+      db_data <- dbGetQuery(db_con, query)
+      dbDisconnect(db_con)  # Always disconnect after finishing the query
+      
+      # Remove the 'user_id' column and update reactive value
+      db_data <- db_data[, !names(db_data) %in% c("user_id"), drop = FALSE]
+      
+      colnames(db_data) <- c("Año", "Mi Café", "Café en el Cauca", "Tecnicafé/Cajibío", "Bogotá", "Santiago, Chile")
+      
+      user_input(db_data)  # Update the reactive variable
     }
   })
-    
-  
   # Second table (yield_rain_data)
   output$yieldRainTable <- renderDT({
-    # Add a blank column to the modified data named "Mi cafe"
-    modified_data <- user_input()
-    
-    if (!"Mi cafe" %in% colnames(modified_data)) {
-      modified_data$`Mi cafe` <- rep("Seleccione", 42)
-    }
-    
-    # Move "Mi cafe" to the second position
-    cols_order <- c("Año", "Mi cafe", setdiff(names(modified_data), c("Año", "Mi cafe")))
-    modified_data <- modified_data[, cols_order]
-    
-    datatable(modified_data, editable = list(target = 'cell', disable = list(columns = c(1, 3, 4))),
+    # Render the DataTable
+    datatable(user_input(),
+              selection = 'single',  # Enable single row selection
               options = list(
-                dom = 'tp',
-                pageLength = 10,
-                language = list(paginate = list(`next` = "Siguiente",
-                                                previous = "Anterior")),
-                columnDefs = list(list(
-                  targets = 2, 
-                  render = DT::JS("
-                                  function(data, type, row, meta) {
-                                    if(type === 'display'){
-                                      return '<select><option value=\"Seleccione\">Seleccione</option><option value=\"Normal\">Normal</option><option value=\"Malo\">Malo</option></select>';
-                                    }
-                                    return data;
-                                  }
-                                  ")
-                ))
+                dom = 'tp',  # Define the table control elements to appear on the page (t for table, p for pagination)
+                pageLength = 10,  # Set number of rows per page
+                language = list(
+                  paginate = list(
+                    `next` = "Siguiente",
+                    previous = "Anterior"
+                  )
+                )
               )
     )
   })
+  
+  # editing rows---
+  # row editing logic
+  output$editUI <- renderUI({
+    # Check if a row has been selected
+    inputId <- input$yieldRainTable_rows_selected
+    if (length(inputId) == 1) {  # Make sure one and only one row is selected
+      selectedRow <- user_input()[inputId, ]
+      fluidRow(
+        column(4,
+               radioButtons("mi_cafe_input", "Estado de 'Mi café':",
+                            choices = c("Normal", "Malo", "No se/No Aplica"),
+                            selected = selectedRow$`Mi cafe`
+               )
+        ),
+        column(2,
+               actionButton("updateBtn", "Actualizar", class = "btn-primary")
+        )
+      )
+    } else {
+      return(NULL)  # Return nothing if no row is selected or multiple rows are selected
+    }
+  })
+  
+ 
+  observeEvent(input$updateBtn, {
+    
+    current_user_id <- as.integer(auth$user)  # Or however you're storing/accessing the current user's ID
+    
+    # Extract the current data and the selected row
+    newData <- user_input()
+    selectedRow <- input$yieldRainTable_rows_selected
+    selectedData <- newData[selectedRow, ]
+    
+    selectedYear <- as.integer(selectedData[1])
+    selectedMiCafe <- input$mi_cafe_input
+    selectedRowIndex <- input$yieldRainTable_rows_selecte
+    
+    
+    # Construct your SQL UPDATE statement
+    # Note: Ensure that your 'year' and 'user_id' columns are correctly named as per your database schema
+    sqlUpdate <- sprintf(
+      "UPDATE mi_cafe_data SET mi_cafe = '%s' WHERE user_id = '%d' AND year = %d",
+      selectedMiCafe,  # The new value from the radio buttons
+      current_user_id,          # The user ID from your authentication system
+      selectedYear         # The year from the selected row in your data table
+    )
+
+    # Execute the SQL UPDATE statement
+    db_con <- dbConnect(RPostgreSQL::PostgreSQL(), dbname = db_params$dbname, host = db_params$host,
+                        port = db_params$port, user = db_params$user, password = db_params$password)
+    tryCatch({
+      dbExecute(db_con, sqlUpdate)
+      
+      # Immediately fetch the updated data for the updated record
+      sqlFetch <- sprintf(
+        "SELECT * FROM mi_cafe_data WHERE user_id = %d AND year = %d",
+        current_user_id,
+        selectedYear
+      )
+      
+      # perform the query
+      updatedRow <- dbGetQuery(db_con, sqlFetch)
+  
+      # store everything except the user_id
+      rowToWrite <- updatedRow[2:7]
+      
+      #Update the reactive data source
+      if(nrow(updatedRow) == 1) {
+        # Get the current data from the reactive value
+        currentData <- user_input()
+
+        # Find the index of the row that was updated
+        selectedRowIndex <- input$yieldRainTable_rows_selected
+        
+        # Update only the specific row in the reactive dataset, excluding the user_id
+        currentData[selectedRowIndex, ] <- rowToWrite
+
+        # Update the reactive value with the modified data
+        user_input(currentData)
+        
+        #Display a success message
+        showNotification("Data updated successfully", type = "message")
+      }
+    }, error = function(e) {
+      showNotification(paste("Failed to update data:", e$message), type = "error")
+    })
+    
+    # Don't forget to disconnect from the database
+    dbDisconnect(db_con)
+  })
 }
+
+
 
 
 # Run the application 
