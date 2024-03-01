@@ -105,6 +105,26 @@ set_labels(
 # Define server logic required
 server <- function(input, output, session) {
   
+  # Render the correlation table
+  output$correlationTable <- renderDT({
+    #
+   
+    # Example of reading data inside renderDT
+    data_cor <- read.csv("vereda_target_cor.csv") %>% 
+      filter(vereda == auth$vereda,
+             vereda_code == 19130012) %>% 
+      select(tecnicafe, santiago, bogota) %>% 
+      pivot_longer(
+        cols = everything(),
+        names_to = "Ubicación",
+        values_to = "Puntaje"
+      ) %>% 
+      mutate(Puntaje = round(((Puntaje + 1) / 2) * 10, digits = 1))
+      
+    # Potentially filter or manipulate data based on reactive values here
+    datatable(data_cor)
+  })
+  
   # Connect to the database at the start of the session
   db_con <- dbConnect(RPostgreSQL::PostgreSQL(), 
                       dbname = db_params$dbname,
@@ -112,9 +132,6 @@ server <- function(input, output, session) {
                       port = db_params$port,
                       user = db_params$user, 
                       password = db_params$password)
-  ### DEBUGGING
-  #create feedback msg
-  feedbackMessage <- reactiveVal("")
   
   # Database test query inside tryCatch to handle potential errors
   tryCatch({
