@@ -114,7 +114,7 @@ server <- function(input, output, session) {
       filter(vereda == auth$vereda,
              vereda_code == 19130012) %>% 
       select(tecnicafe, santiago, bogota) %>% 
-      pivot_longer(
+      tidyr::pivot_longer(
         cols = everything(),
         names_to = "Ubicación",
         values_to = "Puntaje"
