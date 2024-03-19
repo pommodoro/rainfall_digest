@@ -87,7 +87,7 @@ ui <- secure_app(ui, enable_admin = T,
                    ),
                  tags_bottom = 
                    tags$div(tags$p(
-                     "Si tiene preguntas, por favor contactar via WhatsApp al +17328443418 o al", tags$a(
+                     "Si tiene preguntas, por favor contactar via WhatsApp al +1738960130 o al", tags$a(
                        href = "mailto:rap2194@columbia.edu?Subject=Portal de Lluvias Personal",
                        target="_top", "administrador"
                      ),
@@ -121,8 +121,13 @@ server <- function(input, output, session) {
       ) %>% 
       mutate(Puntaje = round(((Puntaje + 1) / 2) * 10, digits = 1))
       
-    # Potentially filter or manipulate data based on reactive values here
-    datatable(data_cor)
+    # Render and turn off both seraching, paging, and endnote on how many records are shown
+    datatable(data_cor, options = list(
+      #pageLength = 3,
+      searching = FALSE,
+      paging = FALSE,
+      info = FALSE
+    ))
   })
   
   # Connect to the database at the start of the session
